@@ -44,10 +44,21 @@ const send = (chat_id, text, extra = {}) => tg("sendMessage", {
 });
 const isOwner = (id) => ownerId && String(id) === ownerId;
 const historyFor = (key) => {
-  if (!chats.has(key)) chats.set(key, []);
-  return chats.get(key);
+  if (!chats.has(key)) boundedSet(chats, key, []);
+  const history = chats.get(key);
+  // Keep the most recently active conversations in the bounded cache.
+  chats.delete(key);
+  chats.set(key, history);
+  return history;
 };
-const getMode = (key) => modes.get(key) || "savage";
+const getMode = (key) => {
+  const mode = modes.get(key) || "savage";
+  if (modes.has(key)) {
+    modes.delete(key);
+    modes.set(key, mode);
+  }
+  return mode;
+};
 const promptFor = (mode) => `You are SAMAYRA, a witty, context-aware Telegram companion. Current personality: ${mode}. Speak natural Hinglish when the user does. Usually keep casual replies concise (5-12 words), but give complete detailed help for technical/educational questions. Be playful, varied, never spam groups, never claim to perform actions you cannot do. Do not generate images.`;
 async function askAI(key, userText) {
   const history = historyFor(key);
