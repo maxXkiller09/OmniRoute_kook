@@ -25,6 +25,8 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check bots/samayra-bot.mjs
+          node --check bots/samayra-state.mjs
+          node --test bots/samayra-state.test.mjs
           node --check scripts/start-samayra.mjs
           test -f src/app/healthz/route.ts
       - name: Validate package metadata
