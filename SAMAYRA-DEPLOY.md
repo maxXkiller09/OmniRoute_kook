@@ -27,7 +27,7 @@ The launcher sets headless mode and runs the API server and Telegram long-pollin
 
 - `/start`, `/help`
 - `/mode` and `/mode <savage|sweet|flirty|dark romance|funny|gangster|formal>`
-- `/forget` clears in-memory short-term chat context
+- `/forget — clear your own short-term chat context
 - Owner-only `/panel` and `/health`
 - Reply-based `/ban`, `/unban`, `/mute`, `/unmute`, `/warn`, `/pin`, `/purge`
 - Group `/lock` and `/unlock` (admin-only)
