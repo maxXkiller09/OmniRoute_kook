@@ -46,16 +46,16 @@ if (!process.env.TELEGRAM_BOT_TOKEN) {
       console.error("[SAMAYRA] API did not become healthy within 3 minutes; bot polling not started.");
       return;
     }
-    bot = spawn(process.execPath, ["bots/samayra-bot.mjs"], { stdio: "inherit", env: process.env });
-    bot.on("exit", (code) => {
-      if (!stopping) {
-        console.error(`[SAMAYRA] Telegram process exited (${code}); restarting in 3 seconds.`);
-        void delay(3000).then(() => {
-          if (!stopping) {
-            bot = spawn(process.execPath, ["bots/samayra-bot.mjs"], { stdio: "inherit", env: process.env });
-          }
-        });
-      }
-    });
+    const launchBot = () => {
+      if (stopping) return;
+      bot = spawn(process.execPath, ["bots/samayra-bot.mjs"], { stdio: "inherit", env: process.env });
+      bot.on("exit", (code) => {
+        if (!stopping) {
+          console.error(`[SAMAYRA] Telegram process exited (${code}); restarting in 3 seconds.`);
+          void delay(3000).then(launchBot);
+        }
+      });
+    };
+    launchBot();
   })();
 }
