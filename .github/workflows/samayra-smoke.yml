@@ -26,5 +26,6 @@ jobs:
         run: |
           node --check bots/samayra-bot.mjs
           node --check scripts/start-samayra.mjs
+          test -f src/app/healthz/route.ts
       - name: Validate package metadata
         run: node -e "JSON.parse(require('node:fs').readFileSync('package.json', 'utf8'))"
