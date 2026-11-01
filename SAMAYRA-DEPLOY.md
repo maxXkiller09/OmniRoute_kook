@@ -29,9 +29,11 @@ The launcher sets headless mode and runs the API server and Telegram long-pollin
 - `/mode` and `/mode <savage|sweet|flirty|dark romance|funny|gangster|formal>`
 - `/forget` clears in-memory short-term chat context
 - Owner-only `/panel` and `/health`
-- Reply-based `/ban`, `/unban`, `/mute`, `/unmute`, `/warn`, `/pin`
+- Reply-based `/ban`, `/unban`, `/mute`, `/unmute`, `/warn`, `/pin`, `/purge`
+- Group `/lock` and `/unlock` (admin-only)
+- Owner-only `/setwelcome <message>` in a group; supports `{name}` and `{chat}` placeholders
 
-In groups SAMAYRA only answers when mentioned or replied to, avoiding unsolicited group spam. The initial implementation uses in-memory conversation context; persistent memory, durable moderation logs, welcome customization, anti-flood, locks, whispers, XO and broadcast are follow-up modules. No image-generation feature is included.
+In groups SAMAYRA only answers when mentioned or replied to, avoiding unsolicited group spam. The initial implementation uses in-memory conversation context; persistent memory, durable moderation logs, whispers, XO and broadcast are follow-up modules. Welcome text, basic in-memory flood limiting and group locks are implemented but reset on process restart. No image-generation feature is included.
 
 ## Important limits
 
