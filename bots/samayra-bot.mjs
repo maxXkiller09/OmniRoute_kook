@@ -16,6 +16,13 @@ const welcomes = new Map();
 const warnings = new Map();
 const flood = new Map();
 const locks = new Map();
+const MAX_MAP_ENTRIES = 500;
+const MAX_FLOOD_ENTRIES = 1000;
+function boundedSet(map, key, value, limit = MAX_MAP_ENTRIES) {
+  if (map.has(key)) map.delete(key);
+  map.set(key, value);
+  while (map.size > limit) map.delete(map.keys().next().value);
+}
 let offset = 0;
 let stopping = false;
 
@@ -84,19 +91,19 @@ async function handle(update) {
       if (!arg) return send(chatId, `Current: ${getMode(chatKey)}\nModes: ${personalityNames.join(", ")}`);
       const selected = personalityNames.find((name) => name === arg.toLowerCase());
       if (!selected) return send(chatId, `Choose: ${personalityNames.join(", ")}`);
-      modes.set(chatKey, selected);
+      boundedSet(modes, chatKey, selected);
       return send(chatId, `Personality set to ${selected} ✨`);
     }
     if (command === "setwelcome") {
       if (!isOwner(userId)) return send(chatId, "Owner-only command.");
       if (msg.chat.type === "private") return send(chatId, "Group mein /setwelcome <message> use karo. {name} aur {chat} placeholders available hain.");
       if (!arg) return send(chatId, "Usage: /setwelcome Welcome {name} to {chat}!");
-      welcomes.set(chatKey, arg.slice(0, 500));
+      boundedSet(welcomes, chatKey, arg.slice(0, 500));
       return send(chatId, "Welcome message set ho gaya (memory-only; restart par reset hoga).");
     }
     if (command === "forget") {
-      chats.delete(chatKey);
-      return send(chatId, "Is chat ka short-term context clear kar diya.");
+      chats.delete(`${chatKey}:${userId}`);
+      return send(chatId, "Tumhara short-term context clear kar diya.");
     }
     if (command === "panel") {
       if (!isOwner(userId)) return send(chatId, "Owner-only command.");
@@ -118,7 +125,7 @@ async function handle(update) {
       if (["lock","unlock"].includes(command)) {
         const permission = { can_send_messages: command === "unlock", can_send_audios: command === "unlock", can_send_documents: command === "unlock", can_send_photos: command === "unlock", can_send_videos: command === "unlock", can_send_video_notes: command === "unlock", can_send_voice_notes: command === "unlock", can_send_polls: command === "unlock", can_send_other_messages: command === "unlock", can_add_web_page_previews: command === "unlock" };
         await tg("setChatPermissions", { chat_id: chatId, permissions: permission });
-        locks.set(chatKey, command === "lock");
+        boundedSet(locks, chatKey, command === "lock");
         return send(chatId, command === "lock" ? "Group chat locked 🔒" : "Group chat unlocked 🔓");
       }
       const member = msg.reply_to_message?.from?.id;
@@ -130,19 +137,24 @@ async function handle(update) {
         else if (command === "unmute") await tg("restrictChatMember", { chat_id: chatId, user_id: member, permissions: { can_send_messages: true, can_send_audios: true, can_send_documents: true, can_send_photos: true, can_send_videos: true, can_send_video_notes: true, can_send_voice_notes: true, can_send_polls: true, can_send_other_messages: true, can_add_web_page_previews: true }, use_independent_chat_permissions: true });
         else if (command === "pin" && msg.reply_to_message) await tg("pinChatMessage", { chat_id: chatId, message_id: msg.reply_to_message.message_id });
         else if (command === "purge") {
-          const targetMessage = msg.reply_to_message.message_id;
-          const lastMessage = msg.message_id;
-          const first = Math.max(targetMessage, lastMessage - 99);
+          if (!msg.reply_to_message?.message_id) return send(chatId, "Purge ke liye jis first message se delete karna hai us par reply karo.");
+          const first = msg.reply_to_message.message_id;
+          const last = msg.message_id;
+          const ids = Array.from({ length: Math.min(100, last - first + 1) }, (_, i) => first + i);
           let deleted = 0;
-          for (let id = first; id <= lastMessage; id++) {
-            try { await tg("deleteMessage", { chat_id: chatId, message_id: id }); deleted++; } catch {}
+          // Small batches keep purge faster without flooding Telegram's API.
+          for (let i = 0; i < ids.length; i += 10) {
+            const results = await Promise.allSettled(ids.slice(i, i + 10).map(message_id =>
+              tg("deleteMessage", { chat_id: chatId, message_id })
+            ));
+            deleted += results.filter(result => result.status === "fulfilled").length;
           }
-          return send(chatId, `Purge attempted; ${deleted} messages deleted.`);
+          return send(chatId, `Purge complete: ${deleted}/${ids.length} messages deleted.`);
         }
         else if (command === "warn") {
           const key = `${chatId}:${member}`;
           const count = (warnings.get(key) || 0) + 1;
-          warnings.set(key, count);
+          boundedSet(warnings, key, count);
           return send(chatId, `⚠️ User warned (${count}/3).`);
         }
         return send(chatId, `Done: ${command}`);
@@ -155,7 +167,7 @@ async function handle(update) {
     const now = Date.now();
     const recent = (flood.get(key) || []).filter(t => now - t < 5000);
     recent.push(now);
-    flood.set(key, recent);
+    boundedSet(flood, key, recent, MAX_FLOOD_ENTRIES);
     if (recent.length > 7) return;
   }
   const isPrivate = msg.chat.type === "private";
