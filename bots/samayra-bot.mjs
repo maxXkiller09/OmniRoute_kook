@@ -90,6 +90,11 @@ async function handle(update) {
       } catch { return send(chatId, "OmniRoute health endpoint unreachable."); }
     }
     if (["ban","mute","unmute","unban","warn","pin","purge"].includes(command)) {
+      if (msg.chat.type === "private") return send(chatId, "Ye command group mein use hoti hai.");
+      try {
+        const actor = await tg("getChatMember", { chat_id: chatId, user_id: userId });
+        if (!["administrator", "creator"].includes(actor.status)) return send(chatId, "Sirf group admins ye command use kar sakte hain.");
+      } catch { return send(chatId, "Admin permission verify nahi ho paayi."); }
       const member = msg.reply_to_message?.from?.id;
       if (!member) return send(chatId, "Is command ke liye target user ke message par reply karo.");
       try {
@@ -99,7 +104,7 @@ async function handle(update) {
         else if (command === "unmute") await tg("restrictChatMember", { chat_id: chatId, user_id: member, permissions: { can_send_messages: true, can_send_audios: true, can_send_documents: true, can_send_photos: true, can_send_videos: true, can_send_video_notes: true, can_send_voice_notes: true, can_send_polls: true, can_send_other_messages: true, can_add_web_page_previews: true }, use_independent_chat_permissions: true });
         else if (command === "pin" && msg.reply_to_message) await tg("pinChatMessage", { chat_id: chatId, message_id: msg.reply_to_message.message_id });
         else if (command === "purge") return send(chatId, "Purge is not enabled in this lightweight build yet.");
-        else return send(chatId, "Warn noted. Persistent moderation logs are being added.");
+        else if (command === "warn") return send(chatId, "Warning system abhi active nahi hai; is command ka action record nahi hua.");
         return send(chatId, `Done: ${command}`);
       } catch (error) { return send(chatId, `Action failed: ${error.message}`); }
     }
