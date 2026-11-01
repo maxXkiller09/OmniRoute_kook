@@ -3,10 +3,10 @@ import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 
 const port = process.env.PORT || process.env.DASHBOARD_PORT || "20128";
-const host = process.env.HOSTNAME || "0.0.0.0";
+const host = process.env.OMNIROUTE_HOSTNAME || "0.0.0.0";
 process.env.OMNIROUTE_HEADLESS = "1";
 process.env.OMNIROUTE_DISABLE_BACKGROUND_SERVICES ||= "1";
-process.env.HOSTNAME = host;
+process.env.OMNIROUTE_HOSTNAME = host;
 process.env.PORT = port;
 process.env.DASHBOARD_PORT = port;
 process.env.API_PORT = port;
