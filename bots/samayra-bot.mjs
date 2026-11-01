@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { boundedSet, touchEntry } from "./samayra-state.mjs";
 /**
  * SAMAYRA Telegram companion for OmniRoute.
  * Uses Telegram's HTTPS Bot API directly to avoid an extra runtime dependency.
@@ -18,11 +19,6 @@ const flood = new Map();
 const locks = new Map();
 const MAX_MAP_ENTRIES = 500;
 const MAX_FLOOD_ENTRIES = 1000;
-function boundedSet(map, key, value, limit = MAX_MAP_ENTRIES) {
-  if (map.has(key)) map.delete(key);
-  map.set(key, value);
-  while (map.size > limit) map.delete(map.keys().next().value);
-}
 let offset = 0;
 let stopping = false;
 
@@ -45,19 +41,10 @@ const send = (chat_id, text, extra = {}) => tg("sendMessage", {
 const isOwner = (id) => ownerId && String(id) === ownerId;
 const historyFor = (key) => {
   if (!chats.has(key)) boundedSet(chats, key, []);
-  const history = chats.get(key);
-  // Keep the most recently active conversations in the bounded cache.
-  chats.delete(key);
-  chats.set(key, history);
-  return history;
+  return touchEntry(chats, key);
 };
 const getMode = (key) => {
-  const mode = modes.get(key) || "savage";
-  if (modes.has(key)) {
-    modes.delete(key);
-    modes.set(key, mode);
-  }
-  return mode;
+  return modes.has(key) ? touchEntry(modes, key) : "savage";
 };
 const promptFor = (mode) => `You are SAMAYRA, a witty, context-aware Telegram companion. Current personality: ${mode}. Speak natural Hinglish when the user does. Usually keep casual replies concise (5-12 words), but give complete detailed help for technical/educational questions. Be playful, varied, never spam groups, never claim to perform actions you cannot do. Do not generate images.`;
 async function askAI(key, userText) {
