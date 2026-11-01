@@ -1,0 +1,30 @@
+name: SAMAYRA integration smoke
+
+on:
+  push:
+    branches: [samayra-ai]
+    paths:
+      - "bots/**"
+      - "scripts/start-samayra.mjs"
+      - "SAMAYRA-DEPLOY.md"
+      - ".github/workflows/samayra-smoke.yml"
+  pull_request:
+    branches: [samayra-ai]
+    paths:
+      - "bots/**"
+      - "scripts/start-samayra.mjs"
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.22.2"
+      - name: Check JavaScript syntax
+        run: |
+          node --check bots/samayra-bot.mjs
+          node --check scripts/start-samayra.mjs
+      - name: Validate package metadata
+        run: node -e "JSON.parse(require('node:fs').readFileSync('package.json', 'utf8'))"
