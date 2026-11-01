@@ -12,6 +12,10 @@ const model = process.env.SAMAYRA_MODEL || "auto";
 const personalityNames = ["savage","sweet","flirty","dark romance","funny","gangster","formal"];
 const chats = new Map();
 const modes = new Map();
+const welcomes = new Map();
+const warnings = new Map();
+const flood = new Map();
+const locks = new Map();
 let offset = 0;
 let stopping = false;
 
@@ -58,8 +62,17 @@ async function askAI(key, userText) {
 }
 async function handle(update) {
   const msg = update.message;
-  if (!msg?.chat || !msg.from || !msg.text) return;
-  const chatId = msg.chat.id, userId = msg.from.id, text = msg.text.trim();
+  if (!msg?.chat || !msg.from) return;
+  const chatId = msg.chat.id, userId = msg.from.id, text = (msg.text || "").trim();
+  if (msg.new_chat_members?.length) {
+    const template = welcomes.get(String(chatId)) || "Welcome {name} to {chat}! ✨";
+    for (const member of msg.new_chat_members) {
+      if (member.is_bot) continue;
+      await send(chatId, template.replaceAll("{name}", member.first_name || "there").replaceAll("{chat}", msg.chat.title || "our group"));
+    }
+    return;
+  }
+  if (!text) return;
   const chatKey = String(chatId);
   const cmd = text.match(/^\/(\w+)(?:@\w+)?(?:\s+([\s\S]*))?$/);
   if (cmd) {
@@ -73,6 +86,13 @@ async function handle(update) {
       if (!selected) return send(chatId, `Choose: ${personalityNames.join(", ")}`);
       modes.set(chatKey, selected);
       return send(chatId, `Personality set to ${selected} ✨`);
+    }
+    if (command === "setwelcome") {
+      if (!isOwner(userId)) return send(chatId, "Owner-only command.");
+      if (msg.chat.type === "private") return send(chatId, "Group mein /setwelcome <message> use karo. {name} aur {chat} placeholders available hain.");
+      if (!arg) return send(chatId, "Usage: /setwelcome Welcome {name} to {chat}!");
+      welcomes.set(chatKey, arg.slice(0, 500));
+      return send(chatId, "Welcome message set ho gaya (memory-only; restart par reset hoga).");
     }
     if (command === "forget") {
       chats.delete(chatKey);
@@ -89,12 +109,18 @@ async function handle(update) {
         return send(chatId, `OmniRoute: HTTP ${r.status}\nTelegram: polling active`);
       } catch { return send(chatId, "OmniRoute health endpoint unreachable."); }
     }
-    if (["ban","mute","unmute","unban","warn","pin","purge"].includes(command)) {
+    if (["ban","mute","unmute","unban","warn","pin","purge","lock","unlock"].includes(command)) {
       if (msg.chat.type === "private") return send(chatId, "Ye command group mein use hoti hai.");
       try {
         const actor = await tg("getChatMember", { chat_id: chatId, user_id: userId });
         if (!["administrator", "creator"].includes(actor.status)) return send(chatId, "Sirf group admins ye command use kar sakte hain.");
       } catch { return send(chatId, "Admin permission verify nahi ho paayi."); }
+      if (["lock","unlock"].includes(command)) {
+        const permission = { can_send_messages: command === "unlock", can_send_audios: command === "unlock", can_send_documents: command === "unlock", can_send_photos: command === "unlock", can_send_videos: command === "unlock", can_send_video_notes: command === "unlock", can_send_voice_notes: command === "unlock", can_send_polls: command === "unlock", can_send_other_messages: command === "unlock", can_add_web_page_previews: command === "unlock" };
+        await tg("setChatPermissions", { chat_id: chatId, permissions: permission });
+        locks.set(chatKey, command === "lock");
+        return send(chatId, command === "lock" ? "Group chat locked 🔒" : "Group chat unlocked 🔓");
+      }
       const member = msg.reply_to_message?.from?.id;
       if (!member) return send(chatId, "Is command ke liye target user ke message par reply karo.");
       try {
@@ -103,12 +129,34 @@ async function handle(update) {
         else if (command === "mute") await tg("restrictChatMember", { chat_id: chatId, user_id: member, permissions: { can_send_messages: false }, use_independent_chat_permissions: true });
         else if (command === "unmute") await tg("restrictChatMember", { chat_id: chatId, user_id: member, permissions: { can_send_messages: true, can_send_audios: true, can_send_documents: true, can_send_photos: true, can_send_videos: true, can_send_video_notes: true, can_send_voice_notes: true, can_send_polls: true, can_send_other_messages: true, can_add_web_page_previews: true }, use_independent_chat_permissions: true });
         else if (command === "pin" && msg.reply_to_message) await tg("pinChatMessage", { chat_id: chatId, message_id: msg.reply_to_message.message_id });
-        else if (command === "purge") return send(chatId, "Purge is not enabled in this lightweight build yet.");
-        else if (command === "warn") return send(chatId, "Warning system abhi active nahi hai; is command ka action record nahi hua.");
+        else if (command === "purge") {
+          const targetMessage = msg.reply_to_message.message_id;
+          const lastMessage = msg.message_id;
+          const first = Math.max(targetMessage, lastMessage - 99);
+          let deleted = 0;
+          for (let id = first; id <= lastMessage; id++) {
+            try { await tg("deleteMessage", { chat_id: chatId, message_id: id }); deleted++; } catch {}
+          }
+          return send(chatId, `Purge attempted; ${deleted} messages deleted.`);
+        }
+        else if (command === "warn") {
+          const key = `${chatId}:${member}`;
+          const count = (warnings.get(key) || 0) + 1;
+          warnings.set(key, count);
+          return send(chatId, `⚠️ User warned (${count}/3).`);
+        }
         return send(chatId, `Done: ${command}`);
       } catch (error) { return send(chatId, `Action failed: ${error.message}`); }
     }
     return;
+  }
+  if (msg.chat.type !== "private") {
+    const key = `${chatId}:${userId}`;
+    const now = Date.now();
+    const recent = (flood.get(key) || []).filter(t => now - t < 5000);
+    recent.push(now);
+    flood.set(key, recent);
+    if (recent.length > 7) return;
   }
   const isPrivate = msg.chat.type === "private";
   const botName = process.env.TELEGRAM_BOT_USERNAME || "";
